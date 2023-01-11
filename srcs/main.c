@@ -6,16 +6,12 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/01/11 17:14:05 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/01/11 17:52:36 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/ft_ping.h"
-#include <signal.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/time.h>
+#include <errno.h>
 
 void	display_help(void)
 {
@@ -30,25 +26,44 @@ Options:\n\
 ");
 }
 
-void	start_ping(char *addr, char verbose)
+void	sigint_handler(int signum)
 {
-	int				sock;
+	(void)signum;
+	printf("\n--- %s ping statistics ---\n", g_ping.host);
+	printf("%d packets transmitted, %d received, %d%% packet loss, time %dms",
+		g_ping.sent, g_ping.recv,
+		(g_ping.sent - g_ping.recv) * 100 / g_ping.sent, g_ping.time);
+	exit(0);
+}
+
+void	start_ping(char verbose)
+{
 	struct addrinfo	*res;
 
-	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-	if (sock < 0)
+	if (getaddrinfo(g_ping.host, NULL, NULL, &res) != 0)
 	{
-		printf("ft_ping: socket error\n");
+		printf("getaddrinfo: Name or service not known\n");
 		exit(1);
 	}
-	if (getaddrinfo(addr, NULL, NULL, &res) != 0)
+	g_ping.sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	if (g_ping.sock < 0)
 	{
-		printf("ft_ping: getaddrinfo error\n");
+		printf("socket: %s\n", strerror(errno));
 		exit(1);
 	}
-	printf("PING %s (%s) 56(84) bytes of data.\n", addr,
+	printf("PING %s (%s) 56(84) bytes of data.\n", g_ping.host,
 		inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr));
-	close(sock);
+	if (verbose)
+	{
+		printf("ft_ping: sock4.fd: %d (socktype: SOCK_DGRAM)", g_ping.sock);
+		printf(", sock6.fd: -1 (socktype:0), hints.ai_family: AF_INET\n\n");
+		printf("ai->ai_family: AF_INET, ai->ai_cannonname: '%s'\n",
+			g_ping.host);
+	}
+	signal(SIGINT, sigint_handler);
+	// ping(res, verbose);
+	freeaddrinfo(res);
+	close(g_ping.sock);
 }
 
 int	main(int argc, char **argv)
@@ -73,6 +88,7 @@ int	main(int argc, char **argv)
 		printf("ft_ping: usage error: Destination address required\n");
 		return (1);
 	}
-	start_ping(argv[argc - 1], verbose);
+	g_ping.host = argv[argc - 1];
+	start_ping(verbose);
 	return (0);
 }
