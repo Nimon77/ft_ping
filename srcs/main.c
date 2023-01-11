@@ -6,15 +6,16 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/01/11 13:58:44 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/01/11 17:14:05 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/ft_ping.h"
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <signal.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <sys/time.h>
 
 void	display_help(void)
 {
@@ -31,7 +32,8 @@ Options:\n\
 
 void	start_ping(char *addr, char verbose)
 {
-	int	sock;
+	int				sock;
+	struct addrinfo	*res;
 
 	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (sock < 0)
@@ -39,6 +41,13 @@ void	start_ping(char *addr, char verbose)
 		printf("ft_ping: socket error\n");
 		exit(1);
 	}
+	if (getaddrinfo(addr, NULL, NULL, &res) != 0)
+	{
+		printf("ft_ping: getaddrinfo error\n");
+		exit(1);
+	}
+	printf("PING %s (%s) 56(84) bytes of data.\n", addr,
+		inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr));
 	close(sock);
 }
 
