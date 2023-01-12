@@ -6,12 +6,11 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/01/11 17:52:36 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/01/12 17:48:12 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/ft_ping.h"
-#include <errno.h>
 
 void	display_help(void)
 {
@@ -33,16 +32,59 @@ void	sigint_handler(int signum)
 	printf("%d packets transmitted, %d received, %d%% packet loss, time %dms",
 		g_ping.sent, g_ping.recv,
 		(g_ping.sent - g_ping.recv) * 100 / g_ping.sent, g_ping.time);
+	close(g_ping.sock);
 	exit(0);
 }
 
-void	start_ping(char verbose)
+unsigned short checksum(unsigned short *addr, size_t size)
 {
+	register long sum = 0;
+	for (; size > 1; size -= 2)
+		sum += *addr++;
+	if (size > 0)
+		sum += *(unsigned char*)addr;
+	while (sum >> 16)
+		sum = (sum & 0xffff) + (sum >> 16);
+	return (~sum);
+}
+
+int ping_loop(struct addrinfo *addr)
+{
+	struct icmphdr icmp = {0};
+
+	icmp.type = ICMP_ECHO;
+	icmp.un.echo.id = 0;
+	icmp.un.echo.sequence = 0;
+	while (1)
+	{
+		// icmp.un.echo.id += 1;
+		// icmp.un.echo.sequence += 256;
+		icmp.checksum = checksum((void *)&icmp, sizeof(struct icmphdr));
+		sendto(g_ping.sock, &icmp, sizeof(icmp), 0, addr->ai_addr,
+				addr->ai_addrlen);
+		g_ping.sent += 1;
+		
+		char data[84] = {0};
+		struct iovec iov = {.iov_base = &data, .iov_len = sizeof(data)};;
+		struct msghdr msg = { .msg_iov = &iov, .msg_iovlen = -1 };
+		int flag;
+		recvmsg(g_ping.sock, &msg, flag);
+		printf("%s\n", data);
+		g_ping.time += 1;
+		g_ping.recv += 1;
+		sleep(1);
+	}
+	return (0);
+}
+
+void	ping(char verbose)
+{
+	int				gai;
 	struct addrinfo	*res;
 
-	if (getaddrinfo(g_ping.host, NULL, NULL, &res) != 0)
+	if ((gai = getaddrinfo(g_ping.host, NULL, NULL, &res)) != 0)
 	{
-		printf("getaddrinfo: Name or service not known\n");
+		printf("getaddrinfo: %s\n", gai_strerror(gai));
 		exit(1);
 	}
 	g_ping.sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
@@ -61,7 +103,7 @@ void	start_ping(char verbose)
 			g_ping.host);
 	}
 	signal(SIGINT, sigint_handler);
-	// ping(res, verbose);
+	ping_loop(res);
 	freeaddrinfo(res);
 	close(g_ping.sock);
 }
@@ -89,6 +131,6 @@ int	main(int argc, char **argv)
 		return (1);
 	}
 	g_ping.host = argv[argc - 1];
-	start_ping(verbose);
+	ping(verbose);
 	return (0);
 }
