@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:44 by nsimon            #+#    #+#             */
-/*   Updated: 2023/01/12 14:50:29 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/03/06 15:06:18 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,13 +23,24 @@
 # include <sys/time.h>
 # include <errno.h>
 
-struct	s_global
+typedef struct	s_ping_info
 {
-	int		sock;
-	char	*host;
-	int		sent;
-	int		recv;
-	int		time;
+	struct timeval		tv_send;
+	struct timeval		tv_recv;
+	int					seq;
+	struct s_ping_info	*next;
+}		g_ping_info;
+
+struct	s_ping
+{
+	int				sock;
+	char			*host;
+	char			*ip;
+	int				sent;
+	int				recv;
+	int				lost;
+	int				ttl;
+	g_ping_info		*infos;
 }		g_ping;
 
 #endif
