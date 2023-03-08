@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:44 by nsimon            #+#    #+#             */
-/*   Updated: 2023/03/06 15:06:18 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/03/08 17:09:24 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,8 @@
 # include <arpa/inet.h>
 # include <unistd.h>
 # include <sys/time.h>
+# include <sys/types.h>
+# include <sys/socket.h>
 # include <errno.h>
 
 typedef struct	s_ping_info
@@ -40,6 +42,7 @@ struct	s_ping
 	int				recv;
 	int				lost;
 	int				ttl;
+	struct addrinfo	*res_addrinfo;
 	g_ping_info		*infos;
 }		g_ping;
 

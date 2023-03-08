@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/03/06 15:24:04 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/03/08 17:09:44 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,6 +25,21 @@ Options:\n\
 ");
 }
 
+void	clear_all()
+{
+	g_ping_info *tmp = g_ping.infos;
+	g_ping_info *next = NULL;
+
+	while (tmp)
+	{
+		next = tmp->next;
+		free(tmp);
+		tmp = next;
+	}
+	close(g_ping.sock);
+	freeaddrinfo(g_ping.res_addrinfo);
+}
+
 void	sigint_handler(int signum)
 {
 	(void)signum;
@@ -36,7 +51,7 @@ void	sigint_handler(int signum)
 		g_ping.sent,
 		g_ping.recv,
 		(g_ping.sent - g_ping.recv) * 100 / g_ping.sent);
-	close(g_ping.sock);
+	clear_all();
 	exit(0);
 }
 
@@ -71,22 +86,40 @@ g_ping_info *find_ping(int seq)
 void clear_ping(void)
 {
 	g_ping_info *tmp = g_ping.infos;
+	g_ping_info *next = NULL;
+	g_ping_info *prec = NULL;
 	struct timeval now;
 
 	gettimeofday(&now, NULL);
 	while (tmp)
 	{
-		if (now.tv_sec - tmp->tv_send.tv_sec > g_ping.ttl)
-		{
-			g_ping.infos = tmp->next;
+		if (now.tv_sec - tmp->tv_send.tv_sec > g_ping.ttl) {
+			printf("timeout\n");
+			if (prec)
+				prec->next = tmp->next;
+			else
+				g_ping.infos = tmp->next;
+			next = tmp->next;
 			free(tmp);
-			tmp = g_ping.infos;
+			tmp = next;
+		}
+		else if (tmp->tv_recv.tv_sec != 0){
+			if (prec)
+				prec->next = tmp->next;
+			else
+				g_ping.infos = tmp->next;
+			next = tmp->next;
+			free(tmp);
+			tmp = next;
+		}
+		else {
+			prec = tmp;
+			tmp = tmp->next;
 		}
 	}
-	free(tmp);
 }
 
-int ping_receive(void)
+int ping_receive()
 {
 	char			buf[1024];
 	struct iphdr	*ip;
@@ -111,37 +144,32 @@ int ping_receive(void)
 			(double)(tmp->tv_recv.tv_usec - tmp->tv_send.tv_usec) / 1000;
 		printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms \n",
 			len, g_ping.ip,
-			icmp->un.echo.sequence, ip->ttl + icmp->un.echo.sequence, time);
+			icmp->un.echo.sequence, ip->ttl, time);
 	}
-	// clear_ping();
+	clear_ping();
 	return (0);
 }
 
-int ping_loop(struct addrinfo *addr)
+int ping_loop()
 {
 	struct icmphdr icmp = {0};
-	g_ping_info *last = NULL;
+	g_ping_info *new = NULL;
 
 	icmp.type = ICMP_ECHO;
 	icmp.un.echo.id = getpid();
 	icmp.un.echo.sequence = 0;
 	while (1)
 	{
-		icmp.un.echo.sequence += 1;
+		icmp.un.echo.sequence++;
 		icmp.checksum = 0;
 		icmp.checksum = checksum((void *)&icmp, sizeof(struct icmphdr));
-		sendto(g_ping.sock, &icmp, sizeof(icmp), 0, addr->ai_addr,
-				addr->ai_addrlen);
-		if (last) {
-			last->next = malloc(sizeof(g_ping_info));
-			last = last->next;
-		}
-		else {
-			g_ping.infos = malloc(sizeof(g_ping_info));
-			last = g_ping.infos;
-		}
-		gettimeofday(&last->tv_send, NULL);
-		last->seq = icmp.un.echo.sequence;
+		sendto(g_ping.sock, &icmp, sizeof(icmp), 0, g_ping.res_addrinfo->ai_addr,
+				g_ping.res_addrinfo->ai_addrlen);
+		new = malloc(sizeof(g_ping_info));
+		new->next = g_ping.infos;
+		g_ping.infos = new;
+		gettimeofday(&g_ping.infos->tv_send, NULL);
+		g_ping.infos->seq = icmp.un.echo.sequence;
 		g_ping.sent += 1;
 		if (ping_receive() == 0)
 			g_ping.recv += 1;
@@ -153,20 +181,20 @@ int ping_loop(struct addrinfo *addr)
 void	ping(char verbose)
 {
 	int				gai;
-	struct addrinfo	*res;
 
-	if ((gai = getaddrinfo(g_ping.host, NULL, NULL, &res)) != 0)
+	if ((gai = getaddrinfo(g_ping.host, NULL, NULL, &g_ping.res_addrinfo)) != 0)
 	{
 		printf("getaddrinfo: %s\n", gai_strerror(gai));
 		exit(1);
 	}
-	g_ping.sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	// g_ping.sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	g_ping.sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP);
 	if (g_ping.sock < 0)
 	{
 		printf("socket: %s\n", strerror(errno));
 		exit(1);
 	}
-	g_ping.ip = inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr);
+	g_ping.ip = inet_ntoa(((struct sockaddr_in *)g_ping.res_addrinfo->ai_addr)->sin_addr);
 	printf("PING %s (%s) 56 bytes of data.\n", g_ping.host, g_ping.ip);
 	if (verbose)
 	{
@@ -176,8 +204,9 @@ void	ping(char verbose)
 			g_ping.host);
 	}
 	signal(SIGINT, sigint_handler);
-	ping_loop(res);
-	freeaddrinfo(res);
+	g_ping.infos = NULL;
+	ping_loop();
+	freeaddrinfo(g_ping.res_addrinfo);
 	close(g_ping.sock);
 }
 
