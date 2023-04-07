@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/04/07 16:26:04 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/04/07 17:10:11 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,6 +25,7 @@ struct s_ping	g_ping = {
 	.recv = 0,
 	.lost = 0,
 	.res_addrinfo = NULL,
+	.timeData = NULL,
 };
 
 void	display_help(void)
@@ -42,7 +43,12 @@ Options:\n\
 
 void	clear_all(struct s_ping *ping)
 {
-	close(ping->sock);
+	if (ping->sock)
+		close(ping->sock);
+	if (ping->res_addrinfo)
+		freeaddrinfo(ping->res_addrinfo);
+	if (ping->timeData)
+		clear_time(&ping->timeData);
 }
 
 void	sigint_handler(int signum)
@@ -58,10 +64,10 @@ void	sigint_handler(int signum)
 		ping->recv,
 		ping->sent == 0 ? 0 : (ping->sent - ping->recv) * 100 / ping->sent);
 	printf("round-trip min/avg/max/stddev = %.3f/%.3f/%.3f/%.3f ms\n",
-		min(ping->timeData, ping->recv),
-		avg(ping->timeData, ping->recv),
-		max(ping->timeData, ping->recv),
-		stddev(ping->timeData, ping->recv));
+		min(ping->timeData),
+		avg(ping->timeData),
+		max(ping->timeData),
+		stddev(ping->timeData));
 	clear_all(ping);
 	exit(0);
 }
@@ -96,9 +102,8 @@ int ping_receive(struct s_ping *ping, struct timeval *timeSend, int verbose) {
 	if (ret < sizeof(struct icmphdr)) {
 		printf("recvmsg: too short packet\n");
 		return (1);
-	}
-	
-	if (verbose) {
+	}	
+	if (DEBUG) {
 		printf("seq: %d \t", buf.icmp.un.echo.sequence);
 		printf("checksum: %d \t", buf.icmp.checksum);
 		printf("ttl: %d \n", buf.ip.ttl);
@@ -109,9 +114,11 @@ int ping_receive(struct s_ping *ping, struct timeval *timeSend, int verbose) {
 	gettimeofday(&now, NULL);
 	diff = (now.tv_sec - timeSend->tv_sec) * 1000 +
 		(double)(now.tv_usec - timeSend->tv_usec) / 1000;
-	printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms \n",
-		ret, ping->ip,
+	printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms \n",
+		DEFDATALEN, ping->ip,
 		buf.icmp.un.echo.sequence, buf.ip.ttl, diff);
+
+	add_time(&ping->timeData, diff);
 	return (0);
 }
 

@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:44 by nsimon            #+#    #+#             */
-/*   Updated: 2023/04/07 16:27:05 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/04/07 16:57:09 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,7 +28,7 @@
 
 # define	SOCK_TYPE SOCK_RAW
 // # define	SOCK_TYPE SOCK_DGRAM
-# define	DEFDATALEN	(64 - 8)
+# define	DEFDATALEN	64
 # define	TTL 64
 
 typedef struct		s_recv
@@ -37,6 +37,12 @@ typedef struct		s_recv
 	struct icmphdr	icmp;
 	char			data[1];
 }	t_recv;
+
+struct s_time
+{
+	double 			value;
+	struct s_time 	*next;
+};
 
 struct		s_ping
 {
@@ -48,13 +54,15 @@ struct		s_ping
 	int				recv;
 	int				lost;
 
-	double			*timeData;
+	struct s_time	*timeData;
 	struct addrinfo	*res_addrinfo;
 };
 
-double		min(double data[], size_t size);
-double		max(double data[], size_t size);
-double		avg(double data[], size_t size);
-double		stddev(double data[], size_t size);
+double		min(struct s_time *timeData);
+double		max(struct s_time *timeData);
+double		avg(struct s_time *timeData);
+double		stddev(struct s_time *timeData);
+void		add_time(struct s_time **timeData, double value);
+void		clear_time(struct s_time **timeData);
 
 #endif
