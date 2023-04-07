@@ -6,19 +6,20 @@
 #    By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2020/01/29 17:07:11 by nsimon            #+#    #+#              #
-#    Updated: 2023/01/11 17:13:05 by nsimon           ###   ########.fr        #
+#    Updated: 2023/04/07 15:27:04 by nsimon           ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
 NAME = ft_ping
 
-INC_PATH = ./includes/
+INC_PATH = ./include/
 
 SRC_PATH = ./srcs/
 
 SRC_NAME =	main.c \
+			utils.c
 
-CC = cc $(CFLAGS)
+CC = clang $(CFLAGS)
 
 # CFLAGS = -Wall -Wextra -Werror -std=c99 -g
 CFLAGS = -g
@@ -61,6 +62,9 @@ $(NAME): $(OBJ)
 $(OBJ_PATH)%.o: $(SRC_PATH)%.c
 	@mkdir $(OBJ_PATH) 2> /dev/null || true
 	@$(CC) -I$(INC_PATH) $(LDINCL) -o $@ -c $<
+
+debug: CFLAGS += -DDEBUG
+debug: re
 
 clean:
 	@make clean -sC $(LBPATH)
