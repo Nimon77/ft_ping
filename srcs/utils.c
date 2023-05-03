@@ -101,7 +101,7 @@ void clear_time(struct s_time **list)
 	if (!*list)
 		return;
 	struct s_time *tmp = *list;
-	while (tmp->next) {
+	while (tmp) {
 		struct s_time *next = tmp->next;
 		free(tmp);
 		tmp = next;

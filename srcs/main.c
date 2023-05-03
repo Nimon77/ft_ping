@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/04/07 17:10:11 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/05/03 16:03:29 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,6 +24,7 @@ struct s_ping	g_ping = {
 	.sent = 0,
 	.recv = 0,
 	.lost = 0,
+	.interval = 1,
 	.res_addrinfo = NULL,
 	.timeData = NULL,
 };
@@ -92,32 +93,46 @@ int ping_receive(struct s_ping *ping, struct timeval *timeSend, int verbose) {
 	struct timeval	now;
 	double diff;
 
-	ret = recvmsg(ping->sock, &msg, 0);
+	ret = recvmsg(ping->sock, &msg, MSG_DONTWAIT);
+	gettimeofday(&now, NULL);
 	if (ret == -1) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		{
+			if (now.tv_sec - timeSend->tv_sec > ping->interval)
+			{
+				if (verbose)
+					printf("Request timeout for icmp_seq %d\n", ping->sent);
+				ping->lost += 1;
+				return (0);
+			}
 			return (1);
+		}
 		printf("recvmsg: %s\n", strerror(errno));
 		return (1);
 	}
 	if (ret < sizeof(struct icmphdr)) {
 		printf("recvmsg: too short packet\n");
 		return (1);
-	}	
+	}
 	if (DEBUG) {
+		printf("type: %d \t", buf.icmp.type);
+		printf("code: %d \t", buf.icmp.code);
+		printf("id: %d \t", buf.icmp.un.echo.id);
 		printf("seq: %d \t", buf.icmp.un.echo.sequence);
 		printf("checksum: %d \t", buf.icmp.checksum);
 		printf("ttl: %d \n", buf.ip.ttl);
 	}
+	if (buf.icmp.un.echo.id != g_ping.id || buf.icmp.un.echo.sequence != ping->sent) {
+		return (1);
+	}
 	if (buf.icmp.type == ICMP_ECHOREPLY) {
 		ping->recv += 1;
 	}
-	gettimeofday(&now, NULL);
 	diff = (now.tv_sec - timeSend->tv_sec) * 1000 +
 		(double)(now.tv_usec - timeSend->tv_usec) / 1000;
-	printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms \n",
-		DEFDATALEN, ping->ip,
+	printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms \n",
+		ret, ping->ip,
 		buf.icmp.un.echo.sequence, buf.ip.ttl, diff);
-
 	add_time(&ping->timeData, diff);
 	return (0);
 }
@@ -125,7 +140,8 @@ int ping_receive(struct s_ping *ping, struct timeval *timeSend, int verbose) {
 int	ping_loop(struct s_ping *ping, int verbose) {
 	struct icmphdr	icmp = {0};
 	ssize_t			res;
-	struct timeval	time;
+	struct timeval	time, now;
+	int				timeSleep;
 
 	icmp.type = ICMP_ECHO;
 	icmp.un.echo.id = ping->id;
@@ -134,14 +150,17 @@ int	ping_loop(struct s_ping *ping, int verbose) {
 		gettimeofday(&time, NULL);
 		icmp.un.echo.sequence++;
 		icmp.checksum = 0;
-		icmp.checksum = checksum((void *)&icmp, sizeof(struct icmphdr));
+		icmp.checksum = checksum((void *)&icmp, sizeof(icmp));
 		res = sendto(ping->sock, &icmp, sizeof(icmp), 0, ping->res_addrinfo->ai_addr,
 			ping->res_addrinfo->ai_addrlen);
-		if (res == sizeof(struct icmphdr))
+		if (res == sizeof(icmp))
 			ping->sent += 1;
-		while (ping->sent > ping->recv)
+		while (ping->sent > ping->recv + ping->lost)
 			ping_receive(ping, &time, verbose);
-		sleep(1);
+		gettimeofday(&now, NULL);
+		timeSleep = (ping->interval - (now.tv_sec - time.tv_sec));
+		sleep(timeSleep < 0 ? 0 : timeSleep);
+		// sleep(1);
 	}
 }
 
@@ -175,23 +194,24 @@ int main(int argc, char **argv)
 	/* Get addresse informations */
 	if ((gai = getaddrinfo(ping->host, NULL, NULL, &ping->res_addrinfo)) != 0)
 	{
-		printf("getaddrinfo: %s\n", gai_strerror(gai));
+		printf("ft_ping: %s\n", gai_strerror(gai));
 		exit(1);
 	}
 	ping->sock = socket(AF_INET, SOCK_TYPE, IPPROTO_ICMP);
 	if (ping->sock < 0)
 	{
-		printf("socket: %s\n", strerror(errno));
+		// printf("ft_ping: %s\n", strerror(errno));
+		printf("ft_ping: %s\n", "You must be root to run this program");
 		exit(1);
 	}
 	ping->ip = inet_ntoa(((struct sockaddr_in *)ping->res_addrinfo->ai_addr)->sin_addr);
-
-
-	ping->id = getpid();
+	ping->id = getpid() & 0xFFFF;
 	if (verbose)
-		printf("FT_PING %s (%s) 56 data bytes, id 0x%x = %d\n", ping->host, ping->ip, ping->id, ping->id);
+		printf("FT_PING %s (%s) %ld data bytes, id 0x%x = %d\n", ping->host, ping->ip,
+			sizeof(struct icmphdr) + sizeof(struct iphdr), ping->id, ping->id);
 	else
-		printf("FT_PING %s (%s) 56 data bytes\n", ping->host, ping->ip);
+		printf("FT_PING %s (%s) %ld data bytes\n", ping->host, ping->ip,
+			sizeof(struct icmphdr) + sizeof(struct iphdr));
 	signal(SIGINT, sigint_handler);
 
 	ping_loop(ping, verbose);

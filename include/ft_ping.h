@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:44 by nsimon            #+#    #+#             */
-/*   Updated: 2023/04/07 16:57:09 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/05/03 15:55:30 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,8 +28,6 @@
 
 # define	SOCK_TYPE SOCK_RAW
 // # define	SOCK_TYPE SOCK_DGRAM
-# define	DEFDATALEN	64
-# define	TTL 64
 
 typedef struct		s_recv
 {
@@ -49,10 +47,11 @@ struct		s_ping
 	int				sock;
 	char			*host;
 	char			*ip;
-	int 			id;
+	uint16_t 		id;
 	int				sent;
 	int				recv;
 	int				lost;
+	unsigned int	interval;
 
 	struct s_time	*timeData;
 	struct addrinfo	*res_addrinfo;
