@@ -108,3 +108,66 @@ void clear_time(struct s_time **list)
 	}
 	*list = NULL;
 }
+
+void add_data(struct s_data **list, int id, struct timeval time)
+{
+	struct s_data *new = malloc(sizeof(struct s_data));
+	new->id = id;
+	new->time = time;
+	new->next = NULL;
+	if (!*list) {
+		*list = new;
+		return ;
+	}
+	struct s_data *tmp = *list;
+	while (tmp->next) {
+		tmp = tmp->next;
+	}
+	tmp->next = new;
+}
+
+void remove_data(struct s_data **list, int id)
+{
+	if (!*list)
+		return;
+	struct s_data *tmp = *list;
+	if (tmp->id == id) {
+		*list = tmp->next;
+		free(tmp);
+		return;
+	}
+	while (tmp->next) {
+		if (tmp->next->id == id) {
+			struct s_data *next = tmp->next->next;
+			free(tmp->next);
+			tmp->next = next;
+			return;
+		}
+		tmp = tmp->next;
+	}
+}
+
+struct timeval *get_data(struct s_data *list, int id)
+{
+	struct s_data *tmp = list;
+	struct timeval *time = NULL;
+	while (tmp) {
+		if (tmp->id == id)
+			return &tmp->time;
+		tmp = tmp->next;
+	}
+	return NULL;
+}
+
+void clear_data(struct s_data **list)
+{
+	if (!*list)
+		return;
+	struct s_data *tmp = *list;
+	while (tmp) {
+		struct s_data *next = tmp->next;
+		free(tmp);
+		tmp = next;
+	}
+	*list = NULL;
+}

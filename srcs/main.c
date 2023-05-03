@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/05/03 16:03:29 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/05/03 18:10:43 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,10 +23,9 @@ struct s_ping	g_ping = {
 	.id = 0,
 	.sent = 0,
 	.recv = 0,
-	.lost = 0,
 	.interval = 1,
 	.res_addrinfo = NULL,
-	.timeData = NULL,
+	.timeStats = NULL,
 };
 
 void	display_help(void)
@@ -48,8 +47,10 @@ void	clear_all(struct s_ping *ping)
 		close(ping->sock);
 	if (ping->res_addrinfo)
 		freeaddrinfo(ping->res_addrinfo);
-	if (ping->timeData)
-		clear_time(&ping->timeData);
+	if (ping->timeStats)
+		clear_time(&ping->timeStats);
+	if (ping->pingData)
+		clear_data(&ping->pingData);
 }
 
 void	sigint_handler(int signum)
@@ -65,10 +66,10 @@ void	sigint_handler(int signum)
 		ping->recv,
 		ping->sent == 0 ? 0 : (ping->sent - ping->recv) * 100 / ping->sent);
 	printf("round-trip min/avg/max/stddev = %.3f/%.3f/%.3f/%.3f ms\n",
-		min(ping->timeData),
-		avg(ping->timeData),
-		max(ping->timeData),
-		stddev(ping->timeData));
+		min(ping->timeStats),
+		avg(ping->timeStats),
+		max(ping->timeStats),
+		stddev(ping->timeStats));
 	clear_all(ping);
 	exit(0);
 }
@@ -85,26 +86,32 @@ unsigned short checksum(unsigned short *addr, size_t size)
 	return (~sum);
 }
 
-int ping_receive(struct s_ping *ping, struct timeval *timeSend, int verbose) {
+int ping_receive(struct s_ping *ping, int verbose) {
 	t_recv buf = {0};
 	struct iovec iov = { .iov_base = &buf, .iov_len = sizeof(buf) * 2 };
 	struct msghdr msg = { .msg_iov = &iov, .msg_iovlen = 1 };
 	ssize_t			ret;
-	struct timeval	now;
+	struct timeval	now, *timeSend;
 	double diff;
 
-	ret = recvmsg(ping->sock, &msg, MSG_DONTWAIT);
+	ret = recvmsg(ping->sock, &msg, 0);
 	gettimeofday(&now, NULL);
+	if (DEBUG)
+	{
+		printf("ret: %ld \t", ret);
+		printf("errno: %d \t", errno);
+		printf("strerror: %s \n", strerror(errno));
+	}
 	if (ret == -1) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 		{
-			if (now.tv_sec - timeSend->tv_sec > ping->interval)
-			{
-				if (verbose)
-					printf("Request timeout for icmp_seq %d\n", ping->sent);
-				ping->lost += 1;
-				return (0);
-			}
+			// if (now.tv_sec - timeSend->tv_sec > ping->interval)
+			// {
+			// 	if (verbose)
+			// 		printf("Request timeout for icmp_seq %d\n", ping->sent);
+			// 	ping->lost += 1;
+			// 	return (0);
+			// }
 			return (1);
 		}
 		printf("recvmsg: %s\n", strerror(errno));
@@ -122,9 +129,10 @@ int ping_receive(struct s_ping *ping, struct timeval *timeSend, int verbose) {
 		printf("checksum: %d \t", buf.icmp.checksum);
 		printf("ttl: %d \n", buf.ip.ttl);
 	}
-	if (buf.icmp.un.echo.id != g_ping.id || buf.icmp.un.echo.sequence != ping->sent) {
+	if (buf.icmp.un.echo.id != g_ping.id) {
 		return (1);
 	}
+	timeSend = get_data(ping->pingData, buf.icmp.un.echo.sequence);
 	if (buf.icmp.type == ICMP_ECHOREPLY) {
 		ping->recv += 1;
 	}
@@ -133,15 +141,15 @@ int ping_receive(struct s_ping *ping, struct timeval *timeSend, int verbose) {
 	printf("%ld bytes from %s: icmp_seq=%d ttl=%d time=%.3f ms \n",
 		ret, ping->ip,
 		buf.icmp.un.echo.sequence, buf.ip.ttl, diff);
-	add_time(&ping->timeData, diff);
+	add_time(&ping->timeStats, diff);
+	remove_data(&ping->pingData, buf.icmp.un.echo.sequence);
 	return (0);
 }
 
 int	ping_loop(struct s_ping *ping, int verbose) {
 	struct icmphdr	icmp = {0};
 	ssize_t			res;
-	struct timeval	time, now;
-	int				timeSleep;
+	struct timeval	time;
 
 	icmp.type = ICMP_ECHO;
 	icmp.un.echo.id = ping->id;
@@ -155,12 +163,11 @@ int	ping_loop(struct s_ping *ping, int verbose) {
 			ping->res_addrinfo->ai_addrlen);
 		if (res == sizeof(icmp))
 			ping->sent += 1;
-		while (ping->sent > ping->recv + ping->lost)
-			ping_receive(ping, &time, verbose);
-		gettimeofday(&now, NULL);
-		timeSleep = (ping->interval - (now.tv_sec - time.tv_sec));
-		sleep(timeSleep < 0 ? 0 : timeSleep);
-		// sleep(1);
+		add_data(&ping->pingData, icmp.un.echo.sequence, time);
+		if (DEBUG)
+			printf("sendto: %s\n", strerror(errno));
+		ping_receive(ping, verbose);
+		sleep(ping->interval);
 	}
 }
 
@@ -204,6 +211,8 @@ int main(int argc, char **argv)
 		printf("ft_ping: %s\n", "You must be root to run this program");
 		exit(1);
 	}
+	struct timeval g_timeout = { .tv_sec = ping->interval, .tv_usec = 0 };
+	setsockopt(ping->sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&g_timeout, sizeof(g_timeout));
 	ping->ip = inet_ntoa(((struct sockaddr_in *)ping->res_addrinfo->ai_addr)->sin_addr);
 	ping->id = getpid() & 0xFFFF;
 	if (verbose)
