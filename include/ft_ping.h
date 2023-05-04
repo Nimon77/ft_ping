@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:44 by nsimon            #+#    #+#             */
-/*   Updated: 2023/05/03 18:08:36 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/05/04 15:59:01 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,6 @@
 # include "libft.h"
 
 # include <signal.h>
-# include <netinet/ip.h>
 # include <netinet/ip_icmp.h>
 # include <netdb.h>
 # include <arpa/inet.h>
@@ -29,7 +28,7 @@
 # define	SOCK_TYPE SOCK_RAW
 // # define	SOCK_TYPE SOCK_DGRAM
 
-typedef struct		s_recv
+typedef struct
 {
 	struct iphdr	ip;
 	struct icmphdr	icmp;
