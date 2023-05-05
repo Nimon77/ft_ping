@@ -6,15 +6,11 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:08 by nsimon            #+#    #+#             */
-/*   Updated: 2023/05/04 16:15:46 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/05/05 17:25:02 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "ft_ping.h"
-
-#ifndef DEBUG
-# define DEBUG 0
-#endif
 
 struct s_ping	g_ping = {
 	.sock = 0,
@@ -185,23 +181,25 @@ int main(int argc, char **argv)
 	verbose = 0;
 	if (argc < 2)
 	{
-		printf("ft_ping: usage error: Destination address required\n");
+		printf("ft_ping: missing host operand\nTry 'ping -h' for more information.\n");
 		return (1);
 	}
-	if (!ft_strcmp(argv[1], "-h"))
-	{
-		display_help();
-		exit(0);
+	for (int i = 1; i < argc; i++) {
+		if (!ft_strcmp(argv[i], "-h"))
+		{
+			display_help();
+			exit(0);
+		}
+		if (!ft_strcmp(argv[i], "-v"))
+			verbose = 1;
+		if (argv[i][0] == '-' && argv[i][1] != 'v' && argv[i][1] != 'h')
+		{
+			printf("ft_ping: invalid option -- '%c'\nTry 'ping -h' for more information.\n", argv[i][1]);
+			return (1);
+		}
+		if (argv[i][0] != '-')
+			ping->host = argv[i];
 	}
-	if (!ft_strcmp(argv[1], "-v"))
-		verbose = 1;
-	if (verbose && argc < 3)
-	{
-		printf("ft_ping: usage error: Destination address required\n");
-		return (1);
-	}
-	ping->host = argv[argc - 1];
-
 	/* Get addresse informations */
 	if ((gai = getaddrinfo(ping->host, NULL, NULL, &ping->res_addrinfo)) != 0)
 	{
@@ -211,7 +209,6 @@ int main(int argc, char **argv)
 	ping->sock = socket(AF_INET, SOCK_TYPE, IPPROTO_ICMP);
 	if (ping->sock < 0)
 	{
-		// printf("ft_ping: %s\n", strerror(errno));
 		printf("ft_ping: %s\n", "You must be root to run this program");
 		exit(1);
 	}
@@ -220,10 +217,10 @@ int main(int argc, char **argv)
 	ping->ip = inet_ntoa(((struct sockaddr_in *)ping->res_addrinfo->ai_addr)->sin_addr);
 	ping->id = getpid() & 0xFFFF;
 	if (verbose)
-		printf("FT_PING %s (%s) %ld data bytes, id 0x%x = %d\n", ping->host, ping->ip,
+		printf("FT_PING %s (%s): %ld data bytes, id 0x%x = %d\n", ping->host, ping->ip,
 			sizeof(struct icmphdr) + sizeof(struct iphdr), ping->id, ping->id);
 	else
-		printf("FT_PING %s (%s) %ld data bytes\n", ping->host, ping->ip,
+		printf("FT_PING %s (%s): %ld data bytes\n", ping->host, ping->ip,
 			sizeof(struct icmphdr) + sizeof(struct iphdr));
 	signal(SIGINT, sigint_handler);
 

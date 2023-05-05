@@ -6,7 +6,7 @@
 /*   By: nsimon <nsimon@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2023/01/10 14:48:44 by nsimon            #+#    #+#             */
-/*   Updated: 2023/05/04 15:59:01 by nsimon           ###   ########.fr       */
+/*   Updated: 2023/05/05 17:25:15 by nsimon           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,6 +27,10 @@
 
 # define	SOCK_TYPE SOCK_RAW
 // # define	SOCK_TYPE SOCK_DGRAM
+
+#ifndef DEBUG
+# define DEBUG 0
+#endif
 
 typedef struct
 {
